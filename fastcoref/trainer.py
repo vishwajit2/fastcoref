@@ -54,9 +54,11 @@ class TrainingArgs:
 
 
 def _load_f_coref_model(args):
-    logger.info(f'Loading FCoref model with underlying transformer {args.model_name_or_path}')
+    logger.info(
+        f'Loading FCoref model with underlying transformer {args.model_name_or_path}')
 
-    config = AutoConfig.from_pretrained(args.model_name_or_path, cache_dir=args.cache_dir)
+    config = AutoConfig.from_pretrained(
+        args.model_name_or_path, cache_dir=args.cache_dir)
     config.coref_head = {
         "max_span_length": args.max_span_length,
         "top_lambda": args.top_lambda,
@@ -79,7 +81,8 @@ def _load_f_coref_model(args):
                 f'Transformer: {t_params:.1f}M, Coref head: {h_params:.1f}M')
 
     if model.base_model_prefix not in SUPPORTED_MODELS:
-        raise NotImplementedError(f'Not supporting {model.base_model_prefix}, choose one of {SUPPORTED_MODELS}')
+        raise NotImplementedError(
+            f'Not supporting {model.base_model_prefix}, choose one of {SUPPORTED_MODELS}')
 
     return model, tokenizer
 
@@ -92,7 +95,8 @@ class CorefTrainer:
 
         self._set_device()
 
-        self.nlp = spacy.load("en_core_web_sm", exclude=["tagger", "parser", "lemmatizer", "ner", "textcat"])
+        self.nlp = spacy.load("en_core_web_sm", exclude=[
+                              "tagger", "parser", "lemmatizer", "ner", "textcat"])
         self.model, self.tokenizer = _load_f_coref_model(self.args)
         self.model.to(self.device)
 
@@ -141,7 +145,8 @@ class CorefTrainer:
 
         # we create batches beacuse the sampler is generating batches of sorted docs -> to avoid many pad tokens
         # so, we need to shuffle the batches somehow.
-        train_batches = coref_dataset.create_batches(self.train_sampler, shuffle=True)
+        train_batches = coref_dataset.create_batches(
+            self.train_sampler, shuffle=True)
 
         t_total = len(train_batches) * self.args.epochs
 
@@ -160,9 +165,12 @@ class CorefTrainer:
 
         head_learning_rate = self.args.head_learning_rate if self.args.head_learning_rate else self.args.learning_rate
         optimizer_grouped_parameters = [
-            {'params': model_decay, 'lr': self.args.learning_rate, 'weight_decay': self.args.weight_decay},
-            {'params': model_no_decay, 'lr': self.args.learning_rate, 'weight_decay': 0.0},
-            {'params': head_decay, 'lr': head_learning_rate, 'weight_decay': self.args.weight_decay},
+            {'params': model_decay, 'lr': self.args.learning_rate,
+                'weight_decay': self.args.weight_decay},
+            {'params': model_no_decay,
+                'lr': self.args.learning_rate, 'weight_decay': 0.0},
+            {'params': head_decay, 'lr': head_learning_rate,
+                'weight_decay': self.args.weight_decay},
             {'params': head_no_decay, 'lr': head_learning_rate, 'weight_decay': 0.0}
         ]
         optimizer = AdamW(optimizer_grouped_parameters,
@@ -174,6 +182,10 @@ class CorefTrainer:
 
         # using mixed precision
         scaler = torch.cuda.amp.GradScaler()
+
+        # evaluating the initial model
+        results = self.evaluate(prefix=f'step_0', test=False)
+        wandb.log(results, step=0)
 
         # Train!
         logger.info("***** Running training *****")
@@ -187,11 +199,15 @@ class CorefTrainer:
         for _ in train_iterator:
             epoch_iterator = tqdm(train_batches, desc="Iteration")
             for step, batch in enumerate(epoch_iterator):
-                batch['input_ids'] = torch.tensor(batch['input_ids'], device=self.device)
-                batch['attention_mask'] = torch.tensor(batch['attention_mask'], device=self.device)
-                batch['gold_clusters'] = torch.tensor(batch['gold_clusters'], device=self.device)
+                batch['input_ids'] = torch.tensor(
+                    batch['input_ids'], device=self.device)
+                batch['attention_mask'] = torch.tensor(
+                    batch['attention_mask'], device=self.device)
+                batch['gold_clusters'] = torch.tensor(
+                    batch['gold_clusters'], device=self.device)
                 if 'leftovers' in batch:
-                    batch['leftovers']['input_ids'] = torch.tensor(batch['leftovers']['input_ids'], device=self.device)
+                    batch['leftovers']['input_ids'] = torch.tensor(
+                        batch['leftovers']['input_ids'], device=self.device)
                     batch['leftovers']['attention_mask'] = torch.tensor(batch['leftovers']['attention_mask'],
                                                                         device=self.device)
 
@@ -199,9 +215,11 @@ class CorefTrainer:
                 self.model.train()
 
                 with torch.cuda.amp.autocast():
-                    outputs = self.model(batch, gold_clusters=batch['gold_clusters'], return_all_outputs=False)
+                    outputs = self.model(
+                        batch, gold_clusters=batch['gold_clusters'], return_all_outputs=False)
 
-                loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
+                # model outputs are always tuple in transformers (see doc)
+                loss = outputs[0]
 
                 tr_loss += loss.item()
                 scaler.scale(loss).backward()
@@ -220,7 +238,8 @@ class CorefTrainer:
 
                 # Evaluation
                 if self.dev_sampler is not None and global_step % self.args.eval_steps == 0:
-                    results = self.evaluate(prefix=f'step_{global_step}', test=False)
+                    results = self.evaluate(
+                        prefix=f'step_{global_step}', test=False)
                     wandb.log(results, step=global_step)
 
                     f1 = results["f1"]
@@ -229,9 +248,12 @@ class CorefTrainer:
                         wandb.run.summary["best_f1"] = best_f1
 
                         # Save model
-                        output_dir = os.path.join(self.args.output_dir, f'model')
-                        save_all(tokenizer=self.tokenizer, model=self.model, output_dir=output_dir)
-                    logger.info(f"best f1 is {best_f1} on global step {best_global_step}")
+                        output_dir = os.path.join(
+                            self.args.output_dir, f'model')
+                        save_all(tokenizer=self.tokenizer,
+                                 model=self.model, output_dir=output_dir)
+                    logger.info(
+                        f"best f1 is {best_f1} on global step {best_global_step}")
 
     def evaluate(self, test=False, prefix=''):
         if test:
@@ -246,7 +268,8 @@ class CorefTrainer:
 
         self.model.eval()
 
-        logger.info(f"***** Running evaluation on {dataset_str} - {len(eval_sampler.dataset)} documents *****")
+        logger.info(
+            f"***** Running evaluation on {dataset_str} - {len(eval_sampler.dataset)} documents *****")
 
         metrics_dict = {'loss': 0., 'post_pruning': MentionEvaluator(), 'mentions': MentionEvaluator(),
                         'coref': CorefEvaluator()}
@@ -264,7 +287,8 @@ class CorefTrainer:
                 gold_clusters = batch['gold_clusters']
 
                 with torch.no_grad():
-                    outputs = self.model(batch, gold_clusters=gold_clusters, return_all_outputs=True)
+                    outputs = self.model(
+                        batch, gold_clusters=gold_clusters, return_all_outputs=True)
 
                 outputs_np = tuple(tensor.cpu().numpy() for tensor in outputs)
 
@@ -272,18 +296,22 @@ class CorefTrainer:
                 loss, span_starts, span_ends, mention_logits, coref_logits = outputs_np
                 metrics_dict['loss'] += loss.item()
 
-                doc_indices, mention_to_antecedent = create_mention_to_antecedent(span_starts, span_ends, coref_logits)
+                doc_indices, mention_to_antecedent = create_mention_to_antecedent(
+                    span_starts, span_ends, coref_logits)
 
                 for i, doc_key in enumerate(doc_keys):
-                    doc_mention_to_antecedent = mention_to_antecedent[np.nonzero(doc_indices == i)]
-                    predicted_clusters = create_clusters(doc_mention_to_antecedent)
+                    doc_mention_to_antecedent = mention_to_antecedent[np.nonzero(
+                        doc_indices == i)]
+                    predicted_clusters = create_clusters(
+                        doc_mention_to_antecedent)
 
                     doc_to_prediction[doc_key] = predicted_clusters
                     doc_to_tokens[doc_key] = tokens[i]
                     doc_to_subtoken_map[doc_key] = subtoken_map[i]
                     doc_to_new_word_map[doc_key] = new_token_map[i]
 
-                    update_metrics(metrics_dict, span_starts[i], span_ends[i], gold_clusters[i], predicted_clusters)
+                    update_metrics(
+                        metrics_dict, span_starts[i], span_ends[i], gold_clusters[i], predicted_clusters)
 
                 progress_bar.update(n=len(doc_keys))
 
@@ -294,5 +322,7 @@ class CorefTrainer:
         return results
 
     def push_to_hub(self, repo_name, organization=None):
-        self.model.push_to_hub(repo_name, organization=organization, use_temp_dir=True)
-        self.tokenizer.push_to_hub(repo_name, organization=organization, use_temp_dir=True)
+        self.model.push_to_hub(
+            repo_name, organization=organization, use_temp_dir=True)
+        self.tokenizer.push_to_hub(
+            repo_name, organization=organization, use_temp_dir=True)
