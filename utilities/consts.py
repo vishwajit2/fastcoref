@@ -1,11 +1,12 @@
-SUPPORTED_MODELS = ['bert', 'roberta', 'distilbert', 'distilroberta', 'longformer']
+SUPPORTED_MODELS = ['bert', 'roberta', 'distilbert',
+                    'distilroberta', 'longformer', 'deberta']
 SPEAKER_START = '#####'
 SPEAKER_END = '###'
 NULL_ID_FOR_COREF = -1
 
 
 PRONOUNS_GROUPS = {
-            'i': 0, 'me': 0, 'my': 0, 'mine': 0, 'myself': 0,
+    'i': 0, 'me': 0, 'my': 0, 'mine': 0, 'myself': 0,
             'you': 1, 'your': 1, 'yours': 1, 'yourself': 1, 'yourselves': 1,
             'he': 2, 'him': 2, 'his': 2, 'himself': 2,
             'she': 3, 'her': 3, 'hers': 3, 'herself': 3,
@@ -25,4 +26,3 @@ CATEGORIES = {'pron-pron-comp': 0,
               'contain': 4,
               'other': 5
               }
-
