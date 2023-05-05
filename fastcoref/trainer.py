@@ -255,6 +255,9 @@ class CorefTrainer:
                     logger.info(
                         f"best f1 is {best_f1} on global step {best_global_step}")
 
+        results = self.evaluate(prefix=f'step_{global_step}', test=False)
+        wandb.log(results, step = global_step)
+
     def evaluate(self, test=False, prefix=''):
         if test:
             eval_sampler = self.test_sampler
